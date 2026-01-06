@@ -173,39 +173,39 @@ String pageFooter = R"HTML(
 
 
 
-void handleRoot() {
+// void handleRoot() {
 
-  String html = pageHeader;
+//   String html = pageHeader;
 
-  html += "<h1 style='margin-top: 50px;'>Welcome to Pir senser</h1>";
+//   html += "<h1 style='margin-top: 50px;'>Welcome to Pir senser</h1>";
 
-  // อันนี้ดี html += "<h1 style='position:absolute; left:0; top:20px;'>Hello World</h1>";
+//   // อันนี้ดี html += "<h1 style='position:absolute; left:0; top:20px;'>Hello World</h1>";
 
-  //html += "<h1 style='float:right; margin:0;'>Hello World</h1>";
-  //html += "<h1 style=' text-align:right;'>Hello World</h1>";
-  //html += "<h1 style=' position:absolute; top:100px; left:50px; '>Hello Word </h4>";
-  html += "<form action='/login' method='POST'>";
-  html += "<div class='form-box'>";
-  html += "<input type= 'text' name='username' placeholder = 'Name'><br>";
-  html += "<input type= 'text'name='password' placeholder = 'Password'><br>";
-  html += "<input type= 'text' name= 'email' placeholder = 'Email'><br><br>";
-  html += "<button class = 'btn-primary btn-large' type='submit'>Login</button>";
-  html += "</div>";
-  html += "</form>";
-  html += pageFooter;
+//   //html += "<h1 style='float:right; margin:0;'>Hello World</h1>";
+//   //html += "<h1 style=' text-align:right;'>Hello World</h1>";
+//   //html += "<h1 style=' position:absolute; top:100px; left:50px; '>Hello Word </h4>";
+//   html += "<form action='/login' method='POST'>";
+//   html += "<div class='form-box'>";
+//   html += "<input type= 'text' name='username' placeholder = 'Name'><br>";
+//   html += "<input type= 'text'name='password' placeholder = 'Password'><br>";
+//   html += "<input type= 'text' name= 'email' placeholder = 'Email'><br><br>";
+//   html += "<button class = 'btn-primary btn-large' type='submit'>Login</button>";
+//   html += "</div>";
+//   html += "</form>";
+//   html += pageFooter;
 
-  server.send(200, "text/html", html);
-}
+//   server.send(200, "text/html", html);
+// }
 
 void handleLogin() {
 
-  String username = server.arg("username");
-  String password = server.arg("password");
-  String email = server.arg("email");
+  // String username = server.arg("username");
+  // String password = server.arg("password");
+  // String email = server.arg("email");
 
-  Serial.println("Username:" + username);
-  Serial.println("Password:" + password);
-  Serial.println("Email:" + email);
+  // Serial.println("Username:" + username);
+  // Serial.println("Password:" + password);
+  // Serial.println("Email:" + email);
 
   String html = pageHeader;
 
@@ -578,9 +578,9 @@ void factoryReset() {
 
 //
 void setup() {
-  server.on("/generate_204", handleRoot);         //Android
-  server.on("/hotspot-detect.html", handleRoot);  //ios
-  server.on("/fwlink", handleRoot);               //Windows
+  server.on("/generate_204",handleLogin);         //Android
+  server.on("/hotspot-detect.html",handleLogin);  //ios
+  server.on("/fwlink", handleLogin);               //Windows
   EEPROM.begin(EEPROM_SIZE);
   Serial.begin(115200);
   Serial.println("WiFi Password Loaded:" + apPassword);
@@ -631,12 +631,12 @@ void setup() {
 
 
 
-  server.on("/", handleRoot);
-  server.on("/login", HTTP_POST, handleLogin);
-  server.onNotFound([]() {
-    server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
-  });
+  //  server.on("/");//handleRoot
+  server.on( "/", handleLogin);   //"/login"
+  //  server.onNotFound([]() {
+  //    server.sendHeader("Location", "/", true);
+  //   server.send(302, "text/plain", "");
+  // });
   //เชื่อมต่อwifi
   server.on("/connectwifi", HTTP_POST, []() {
     String wifi_ssid = server.arg("ssid");
@@ -663,10 +663,10 @@ void setup() {
       Serial.println("\nWiFi Connected!");
       Serial.println(WiFi.localIP());
       server.send(200, "text/plain", "✅ Connected to Internet!");
-      String e1 = loadEmail(EMAIL1_ADDR);
-        if(e1.length()>5){
-          sendEmailFromESP(e1,ssid);
-        }
+      // String e1 = loadEmail(EMAIL1_ADDR);
+      //   if(e1.length()>5){
+      //     sendEmailFromESP(e1,ssid);
+      //   }
     } else {
       Serial.println("\nWiFi Failed!");
       server.send(200, "text/plain", "❌ Connection Failed");
@@ -686,6 +686,11 @@ void setup() {
     Serial.println("Email2: " + e2);
     Serial.println("Email3: " + e3);
     Serial.println("Email4: " + e4);
+
+      e1 = loadEmail(EMAIL1_ADDR);
+        if(e1.length()>5){
+          sendEmailFromESP(e1,ssid);
+        }
     server.send(200, "text/plain", "OK");
   });
 
