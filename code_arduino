@@ -600,7 +600,7 @@ void setup() {
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     Serial.print("Auto connecting to WiFi");
     unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) //ค่าเดิม10000{
       delay(500);
       Serial.print(".");
     }
@@ -691,6 +691,18 @@ void setup() {
         if(e1.length()>5){
           sendEmailFromESP(e1,ssid);
         }
+      e2 = loadEmail(EMAIL2_ADDR);
+        if(e2.length()>5){
+          sendEmailFromESP(e2,ssid);
+        } 
+      e3 = loadEmail(EMAIL3_ADDR);
+        if(e3.length()>5){
+          sendEmailFromESP(e3,ssid);
+        }   
+      e4 = loadEmail(EMAIL4_ADDR);
+        if(e4.length()>5){
+          sendEmailFromESP(e4,ssid);
+        }  
     server.send(200, "text/plain", "OK");
   });
 
