@@ -1,0 +1,792 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <DNSServer.h>
+#include <HTTPClient.h>
+#include <EEPROM.h>
+#include <Preferences.h>
+
+const byte DNS_PORT = 53;
+WebServer server(80);
+DNSServer dnsServer;
+//ค่าเริมต้น
+String ssid = "SENSER-AP";
+String apPassword = "12345678";
+char currentLang = 'T';
+//
+String deviceId;
+//
+#define EEPROM_SIZE 512
+#define SSID_ADDR 0
+#define PASS_ADDR 40
+#define LANG_ADDR 80
+#define WiFi_SSID_ADDR 120
+#define WIFI_PASS_ADDR 140
+#define EMAIL1_ADDR 180
+#define EMAIL2_ADDR 220
+#define EMAIL3_ADDR 260
+#define EMAIL4_ADDR 300
+
+
+String pageHeader = R"HTML(
+<!DOCTYPE html>
+<html>
+<head>
+<!-- <meta name= "viewport" content="width=device-width,initial-scale=1.0"> -->
+<meta charset="utf-8">
+<title>ESP32 Portal</title>
+<style>
+    body {
+        margin: 0;
+        font-family: Arial;
+        text-align: center;
+        background: white;            
+        color: #333;
+    }
+    .container { padding-top: 30px; }
+    .card {
+        background: #ffffff;
+        padding: 20px;
+        margin: 20px auto;
+        width: 90%;
+        max-width: 420px;
+        border-radius: 18px;
+    }
+    
+    input {
+        width: 100%;
+        height: 50px;
+        box-sizing: border-box;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 2px solid #000;   /*สีกรอบเป็นสีดำ*/
+        margin-bottom: 10px;
+        font-size: 40px;
+
+        
+    }
+
+   
+
+    .btn-primary{
+      background:#4e73df;
+      color:white;
+      border: none;
+      border-radius: 8px;
+      text-decoration:none;
+      display: inline-block;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .btn-large{
+      padding: 40px 70px;
+      font-size: 30px;
+      margin-bottom: 10px;
+      
+    }
+    .btn-small{
+      padding: 15px 20px;
+      font-size: 18px;
+    }
+
+    .lang{
+      position:absolute;
+      top: 10px;
+      right: 10px;
+    }
+
+    .form-box{
+      margin-top: 150px;
+    }
+    .form-box-welcome{
+      margin-top:50px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+    }
+    .modal-content{
+      background:#fff;
+      margin: 15% auto;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 12px;
+    }
+    .modal-content input{
+      font-size : 20px;
+    }
+    .modal-content button{
+      margin: 35px;
+    }
+
+
+</style>
+
+</head>
+<body>
+<div class='container'>
+<div class='card'>
+
+)HTML";
+
+
+
+
+
+String pageFooter = R"HTML(
+<br>
+
+
+<br><br>
+
+
+
+<div class="lang">
+
+<a class="btn-primary btn-small" href="/lang/th">TH</a>
+<a class="btn-primary btn-small" href="/lang/en">EN</a>
+
+</div>
+</body></html>
+)HTML";
+
+
+
+//ปุ่ม html
+//  String pageFooter1 = R"HTML(
+//  <br><hr>
+//  <a class='btn' href='/lang/th'>🇹🇭 TH</a>
+//  <a class='btn' href='/lang/en'>🇺🇸 EN</a>
+//  </div></div>
+//  </body></html>
+//  )HTML";
+
+
+
+
+
+// void handleRoot() {
+
+//   String html = pageHeader;
+
+//   html += "<h1 style='margin-top: 50px;'>Welcome to Pir senser</h1>";
+
+//   // อันนี้ดี html += "<h1 style='position:absolute; left:0; top:20px;'>Hello World</h1>";
+
+//   //html += "<h1 style='float:right; margin:0;'>Hello World</h1>";
+//   //html += "<h1 style=' text-align:right;'>Hello World</h1>";
+//   //html += "<h1 style=' position:absolute; top:100px; left:50px; '>Hello Word </h4>";
+//   html += "<form action='/login' method='POST'>";
+//   html += "<div class='form-box'>";
+//   html += "<input type= 'text' name='username' placeholder = 'Name'><br>";
+//   html += "<input type= 'text'name='password' placeholder = 'Password'><br>";
+//   html += "<input type= 'text' name= 'email' placeholder = 'Email'><br><br>";
+//   html += "<button class = 'btn-primary btn-large' type='submit'>Login</button>";
+//   html += "</div>";
+//   html += "</form>";
+//   html += pageFooter;
+
+//   server.send(200, "text/html", html);
+// }
+
+void handleLogin() {
+
+  // String username = server.arg("username");
+  // String password = server.arg("password");
+  // String email = server.arg("email");
+
+  // Serial.println("Username:" + username);
+  // Serial.println("Password:" + password);
+  // Serial.println("Email:" + email);
+
+  String html = pageHeader;
+
+  html += R"HTML(
+    <script>
+    alert("Login Success 🎉 Welcome!");
+    </script>
+    <p id="netStatus" style="
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    color:red;
+    font-weight:bold;
+    font-size: 30px;
+    z-index: 9999;
+    ">
+      Not connect internet
+    </p>
+
+    <script>
+    function checkInternetStatus(){
+      fetch("/status")
+      .then(res => res.text())
+      .then(status => {
+        let label = document.getElementById("netStatus");
+        if(status === "connected"){
+          label.innerText = "Connect internet";
+          label.style.color ="green";
+        }
+        else{
+          label.innerText = "Not connect internet";
+          label.style.color = "red";
+        }
+      })
+    }
+    checkInternetStatus();
+    setInterval(checkInternetStatus,3000);
+    </script>
+
+    <h1>Welcome</h1> 
+    <h1>Setting</h1>
+    <h1 id= "deviceName" style="margin-top:50px;">Name:
+    )HTML";
+  html += ssid;
+  html += R"HTML(
+      </h1>
+
+    <div id="wifiModal" class="modal">
+    <div class ="modal-content">
+    <h2>Connect WiFi</h2>
+    <input id="wifi_ssid" type="text" placeholder="WiFi SSID">
+    <input id="wifi_pass" type="password" placeholder="WiFi Password">
+    <br>
+    <button class="btn-primary btn-small" onclick="closeWiFi()">Cancel</button>
+    <button class="btn-primary btn-small" onclick="submitWiFi()">Connect</button>
+    </div>
+    </div>
+    <div id="emailModal" class="modal">
+    <div class="modal-content">
+    <h2> Add Email</h2>
+    <input id="email1" type="email"placeholder="Email 1">
+    <input id="email2" type="email"placeholder="Email 2">
+    <input id="email3" type="email"placeholder="Email 3">
+    <input id="email4" type="email"placeholder="Email 4">
+    <br>
+    <button class="btn-primary btn-small" onclick="closeEmail()">Cancel</button>
+    <button class="btn-primary btn-small" onclick="saveEmail()">OK</button>
+    </div>
+    </div>
+
+
+
+
+    <div class= 'form-box-welcome'>
+    <button class = "btn-primary btn-large"onclick="openWiFi()">Connect Internet</button>
+    <script>
+    function openWiFi(){
+      document.getElementById("wifiModal").style.display = "block";      
+    }
+    function closeWiFi(){
+      document.getElementById("wifiModal").style.display ="none";
+    }
+    function submitWiFi(){
+      var ssid = document.getElementById("wifi_ssid").value;
+      var pass = document.getElementById("wifi_pass").value;
+     
+      if(!ssid){
+        alert("Please enter SSID");
+        return;
+      }
+
+       if(pass.length < 8){
+        alert("password must be at least 8 characters");
+        return;
+      }
+
+      fetch("/connectwifi",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/x-www-form-urlencoded"
+        },
+        body:"ssid="+encodeURIComponent(ssid)+"&password="+encodeURIComponent(pass)
+      })
+      .then(res => res.text())
+      .then(msg =>{
+        alert(msg);
+        closeWiFi();
+      });
+    }
+    </script>
+    <button class = "btn-primary btn-large"onclick="openEmail()">Add email</button>
+    <script>
+    function openEmail(){
+      document.getElementById("emailModal").style.display = "block";
+    }
+    function closeEmail(){
+      document.getElementById("emailModal").style.display = "none";
+    }
+    
+    function isValidEmail(e){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    }
+      
+    function saveEmail(){
+      
+    
+      
+      var e1 = document.getElementById("email1").value;
+      var e2 = document.getElementById("email2").value;
+      var e3 = document.getElementById("email3").value;
+      var e4 = document.getElementById("email4").value;
+
+     
+       var emails = [e1,e2,e3,e4].filter(e=>e);
+
+       for(let e of emails){
+        if(!isValidEmail(e)){
+          alert("Email ไม่ถูกต้อง"+e);
+          return;
+        }
+        }
+       
+      
+          fetch("/saveemail",{
+            method:"POST",
+            headers:{  "Content-Type":"application/x-www-form-urlencoded"},
+            body:"e1="+encodeURIComponent(e1)+
+                  "&e2="+encodeURIComponent(e2)+
+                  "&e3="+encodeURIComponent(e3)+
+                  "&e4="+encodeURIComponent(e4)
+          }).then(() =>{
+            alert("บันทึก Email แล้ว");
+        
+          closeEmail();
+        
+        
+        });
+        
+        
+    }
+    </script>
+    <button class = "btn-primary btn-large"onclick="renamesenser()">ReName Device</button>
+    <script>
+    function renamesenser(){
+      var name =prompt("Enter Name");
+      if(name){
+        fetch("/rename",{
+          method:"POST",
+          headers:{
+            "Content-Type":"application/x-www-form-urlencoded"
+          },
+          body:"name="+encodeURIComponent(name)
+        }).then(() =>{
+          alert("Saved! Rebooting...");
+          setTimeout(() => location.reload(),2000)
+        });
+        
+      }
+    }
+    </script>
+
+    <button class = 'btn-primary btn-large'onclick="repassword()">RePassword Device</button>
+    <script>
+    function repassword(){
+      var pass = prompt("Enter new password");
+      if(pass && pass.length >=8){
+        fetch("/repassword",{
+          method:"POST",
+          headers:{
+            "Content-Type":"application/x-www-form-urlencoded"
+          },
+          body:"password="+encodeURIComponent(pass)
+        }).then(()=>{
+          alert("Password saved! Rebooting...");
+        });
+      }
+      else{
+        alert("Password must be at least 8 characters");
+      }
+    }
+    </script>
+
+    <button class = 'btn-primary btn-large'onclick="showPassword()">Show Password Device</button>
+    <script>
+    function showPassword(){
+      fetch("/showpassword")
+      .then(res=> res.text())
+      .then(pass=>{
+        alert("WiFi Password:"+ pass);
+      });
+    }
+    </script>
+    <button class = 'btn-primary btn-large' onclick="reset()">Reset Device</button>
+    <script>
+    function reset(){
+      if(confirm("Are you sure you want to reset?")){
+      fetch("/reset",{method:"POST"})
+      .then(()=>{
+        alert("Reset complete! Rebooting...");
+      });
+      }
+    }
+    </script>
+    <button class = "btn-primary btn-large">Cusstom Mode</button>
+
+    </div>
+
+   
+  )HTML";
+
+
+  html += "<script>var DEVICE_ID = '" + deviceId + "';</script>";
+  html += pageFooter;
+
+  server.send(200, "text/html", html);
+}
+// ฟังก์ชันบันทึก wifi  และ password
+void saveWiFicred(String ssid, String pass) {
+  ssid = ssid.substring(0, 32);
+  pass = pass.substring(0, 32);
+  for (int i = 0; i < 32; i++) {
+    EEPROM.write(WiFi_SSID_ADDR + i, i < ssid.length() ? ssid[i] : 0);
+    EEPROM.write(WIFI_PASS_ADDR + i, i < pass.length() ? pass[i] : 0);
+  }
+  EEPROM.commit();
+}
+// โหลด ssid wifi
+String loadWiFiSSID() {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(WiFi_SSID_ADDR + i);
+    if (c == 0xff) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = 0;
+  return String(buf);
+}
+// ฟังก์ชัน โหลด wifipassword
+String loadWiFiPASS() {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(WIFI_PASS_ADDR + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = 0;
+  return String(buf);
+}
+
+
+
+// ฟังชันก์บันทึกชื่อ
+void saveSSID(String name) {
+  if (name.length() > 32) {
+    name = name.substring(0, 32);
+  }
+  for (int i = 0; i < 32; i++) {
+    if (i < name.length()) {
+      EEPROM.write(SSID_ADDR + i, name[i]);
+    } else {
+      EEPROM.write(SSID_ADDR + i, 0);
+    }
+  }
+  EEPROM.commit();
+}
+
+String loadSSID() {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(SSID_ADDR + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = '\0';
+  if (strlen(buf) == 0) return "SENSER-AP";
+  return String(buf);
+}
+//ฟังก์ชันบันทึกรหัสผ่าน
+void savePassword(String pass) {
+  if (pass.length() < 8) return;  //wifi ต้องมี>= 8 ตัว
+  if (pass.length() > 32) pass = pass.substring(0, 32);
+  for (int i = 0; i < 32; i++) {
+    if (i < pass.length())
+      EEPROM.write(PASS_ADDR + i, pass[i]);
+    else
+      EEPROM.write(PASS_ADDR + i, 0);
+  }
+  EEPROM.commit();
+}
+
+//ฟังชันก์โหลด Password จาก EEPROM
+String loadPassword() {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(PASS_ADDR + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = '\0';
+  if (strlen(buf) < 8) return "12345678";  // ค่าเริ่มต้น
+  return String(buf);
+}
+
+ //ฟังก์ชันส่ง Email ยัง server
+void sendEmailFromESP(String email,String deviceName){
+  if(WiFi.status() !=WL_CONNECTED){
+    Serial.println("WiFi not connected");
+    return;
+  }
+  HTTPClient http;
+  http.begin("https://pir-senser-backend.onrender.com/send-email");
+  http.addHeader("Content-Type", "application/json");
+  String body = "{";
+  body += "\"email\":[\""+email+"\"],";
+  body +="\"deviceName\":\""+deviceName+"\"";
+  body += "}";
+  int httpCode = http.POST(body);
+  String payload = http.getString();
+  if(httpCode > 0 ){
+    Serial.print("Email sent:"+ email);
+    Serial.print("Status:"+ String(httpCode));
+    Serial.println("Response:"+payload);
+  }
+  else{
+    Serial.println("Email failed");
+  }
+  http.end();
+}
+
+
+
+//ฟังก์ชันsave email
+void saveEmail(int addr, String email) {
+  email = email.substring(0, 32);
+  for (int i = 0; i < 32; i++) {
+    EEPROM.write(addr + i, i < email.length() ? email[i] : 0);
+  }
+  EEPROM.commit();
+}
+
+// ฟังก์ชันนำ Email เพื่อไปแสดง
+String loadEmail(int addr) {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(addr + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = 0;
+  return String(buf);
+}
+
+//ฟังก์ชันล้างค่าข้อมูล
+void factoryReset() {
+  for (int i = 0; i < EEPROM_SIZE; i++) {
+    EEPROM.write(i, 0);
+  }
+  for (int i = WiFi_SSID_ADDR; i < WIFI_PASS_ADDR + 32; i++) {
+    EEPROM.write(i, 0);
+  }
+
+  String def = "SENSER-AP";
+  for (int i = 0; i < def.length(); i++) {
+    EEPROM.write(SSID_ADDR + i, def[i]);
+  }
+  String defPass = "12345678";
+  for (int i = 0; i < defPass.length(); i++) { EEPROM.write(PASS_ADDR + i, defPass[i]); }
+
+  for (int i = EMAIL1_ADDR; i < EMAIL4_ADDR + 32; i++) {
+    EEPROM.write(i, 0);
+  }
+
+  EEPROM.commit();
+  Serial.println("Factory reset done");
+  delay(500);
+  ESP.restart();
+}
+// ทำหน้าที่ส่งไปยัง Node.js
+
+
+
+
+//
+void setup() {
+  server.on("/generate_204",handleLogin);         //Android
+  server.on("/hotspot-detect.html",handleLogin);  //ios
+  server.on("/fwlink", handleLogin);               //Windows
+  EEPROM.begin(EEPROM_SIZE);
+  Serial.begin(115200);
+  Serial.println("WiFi Password Loaded:" + apPassword);
+  WiFi.mode(WIFI_AP_STA);
+  deviceId = WiFi.macAddress();
+  Serial.println("Device ID:" + deviceId);
+
+
+  ssid = loadSSID();
+  apPassword = loadPassword();
+  WiFi.softAP(ssid.c_str(), apPassword.c_str());
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+  String sta_ssid = loadWiFiSSID();
+  String sta_pass = loadWiFiPASS();
+  if (sta_ssid.length() > 0) {
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
+    Serial.print("Auto connecting to WiFi");
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) //ค่าเดิม10000{
+      delay(500);
+      Serial.print(".");
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\n Auto WiFi Connected");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("\n Auto WiFi Failed");
+    }
+  
+
+
+
+  server.on("/lang/th", []() {
+    currentLang = 'T';
+    Serial.println("Language: TH");
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  });
+
+  server.on("/lang/en", []() {
+    currentLang = 'E';
+    Serial.println("Language: EN");
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  });
+
+
+
+
+  //  server.on("/");//handleRoot
+  server.on( "/", handleLogin);   //"/login"
+  //  server.onNotFound([]() {
+  //    server.sendHeader("Location", "/", true);
+  //   server.send(302, "text/plain", "");
+  // });
+  //เชื่อมต่อwifi
+  server.on("/connectwifi", HTTP_POST, []() {
+    String wifi_ssid = server.arg("ssid");
+    String wifi_pass = server.arg("password");
+
+    Serial.println("Connecting to WiFi...");
+    Serial.println("SSID:" + wifi_ssid);
+    Serial.println("PASS:" + wifi_pass);
+
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.disconnect(true);
+    delay(500);
+    saveWiFicred(wifi_ssid, wifi_pass);
+    WiFi.begin(wifi_ssid.c_str(), wifi_pass.c_str());
+
+
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
+      delay(500);
+      Serial.print(".");
+      yield();
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nWiFi Connected!");
+      Serial.println(WiFi.localIP());
+      server.send(200, "text/plain", "✅ Connected to Internet!");
+      // String e1 = loadEmail(EMAIL1_ADDR);
+      //   if(e1.length()>5){
+      //     sendEmailFromESP(e1,ssid);
+      //   }
+    } else {
+      Serial.println("\nWiFi Failed!");
+      server.send(200, "text/plain", "❌ Connection Failed");
+    }
+  });
+  server.on("/status",HTTP_GET,[](){
+    if(WiFi.status() == WL_CONNECTED){
+      server.send(200,"text/plain","connected");
+    } else{
+      server.send(200,"text/plain","not_connected");
+    }
+  });
+
+
+  server.on("/saveemail", HTTP_POST, []() {
+    String e1 = server.arg("e1");
+    String e2 = server.arg("e2");
+    String e3 = server.arg("e3");
+    String e4 = server.arg("e4");
+    saveEmail(EMAIL1_ADDR, server.arg("e1"));
+    saveEmail(EMAIL2_ADDR, server.arg("e2"));
+    saveEmail(EMAIL3_ADDR, server.arg("e3"));
+    saveEmail(EMAIL4_ADDR, server.arg("e4"));
+    Serial.println("Email1: " + e1);
+    Serial.println("Email2: " + e2);
+    Serial.println("Email3: " + e3);
+    Serial.println("Email4: " + e4);
+
+      e1 = loadEmail(EMAIL1_ADDR);
+        if(e1.length()>5){
+          sendEmailFromESP(e1,ssid);
+        }
+      e2 = loadEmail(EMAIL2_ADDR);
+        if(e2.length()>5){
+          sendEmailFromESP(e2,ssid);
+        } 
+      e3 = loadEmail(EMAIL3_ADDR);
+        if(e3.length()>5){
+          sendEmailFromESP(e3,ssid);
+        }   
+      e4 = loadEmail(EMAIL4_ADDR);
+        if(e4.length()>5){
+          sendEmailFromESP(e4,ssid);
+        }  
+    server.send(200, "text/plain", "OK");
+  });
+
+
+  server.on("/rename", HTTP_POST, []() {
+    String newName = server.arg("name");
+    if (newName.length() > 0) {
+      saveSSID(newName);
+      server.send(200, "text/plain", "OK");
+      delay(500);
+      ESP.restart();
+    } else {
+      server.send(400, "text/plain", "ERROR");
+    }
+  });
+
+  server.on("/repassword", HTTP_POST, []() {
+    String pass = server.arg("password");
+    if (pass.length() >= 8) {
+      savePassword(pass);
+      server.send(200, "text/plain", "OK");
+      delay(500);
+      ESP.restart();
+    } else {
+      server.send(400, "text/plain", "PASSWORD_TOO_SHORT");
+    }
+  });
+  server.on("/showpassword", HTTP_GET, []() {
+    String pass = loadPassword();  //อ่านรหัสจาก EEPROM
+    server.send(200, "text/plain", pass);
+  });
+  server.on("/reset", HTTP_POST, []() {
+    server.send(200, "text/plain", "RESET");
+    delay(300);
+    factoryReset();
+  });
+
+
+  server.begin();
+  Serial.println("AP SSID: " + ssid);
+  Serial.println("Server started at IP:" + WiFi.softAPIP().toString());
+}
+void loop() {
+
+  dnsServer.processNextRequest();
+  server.handleClient();
+}
