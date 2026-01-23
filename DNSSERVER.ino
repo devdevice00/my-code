@@ -3,7 +3,7 @@
 #include <DNSServer.h>
 #include <HTTPClient.h>
 #include <EEPROM.h>
-#include <Preferences.h>
+//#include <Preferences.h>
 
 const byte DNS_PORT = 53;
 WebServer server(80);
@@ -215,11 +215,11 @@ void handleLogin() {
     </script>
     <p id="netStatus" style="
     position: fixed;
-    top: 10px;
+    top: 0px;
     left: 10px;
     color:red;
     font-weight:bold;
-    font-size: 30px;
+    font-size: 20px;
     z-index: 9999;
     ">
       Not connect internet
@@ -232,11 +232,11 @@ void handleLogin() {
       .then(status => {
         let label = document.getElementById("netStatus");
         if(status === "connected"){
-          label.innerText = "Connect internet";
+          label.innerText = "🟢Connect internet";
           label.style.color ="green";
         }
         else{
-          label.innerText = "Not connect internet";
+          label.innerText = "🔴Not connect internet";
           label.style.color = "red";
         }
       })
@@ -271,7 +271,7 @@ void handleLogin() {
     <input id="email3" type="email"placeholder="Email 3">
     <input id="email4" type="email"placeholder="Email 4">
     <br>
-    <button class="btn-primary btn-small" onclick="closeEmail()">Cancel</button>
+    <button class="btn-primary btn-small" onclick="closeEmail()">Cancel</button> 
     <button class="btn-primary btn-small" onclick="saveEmail()">OK</button>
     </div>
     </div>
@@ -319,6 +319,14 @@ void handleLogin() {
     <button class = "btn-primary btn-large"onclick="openEmail()">Add email</button>
     <script>
     function openEmail(){
+      fetch("/getemail")
+      .then(res => res.json())
+      .then(data =>{
+        document.getElementById("email1").value = data.e1 || "";
+        document.getElementById("email2").value = data.e2 || "";
+        document.getElementById("email3").value = data.e3 || "";
+        document.getElementById("email4").value = data.e4 || "";
+      });
       document.getElementById("emailModal").style.display = "block";
     }
     function closeEmail(){
@@ -429,7 +437,7 @@ void handleLogin() {
       }
     }
     </script>
-    <button class = "btn-primary btn-large">Cusstom Mode</button>
+    <button class = "btn-primary btn-large">Custom Mode</button>
 
     </div>
 
@@ -529,7 +537,7 @@ String loadPassword() {
   return String(buf);
 }
 
- //ฟังก์ชันส่ง Email ยัง server
+ //ฟังก์ชันส่ง Email ไปยัง server
 void sendEmailFromESP(String email,String deviceName){
   if(WiFi.status() !=WL_CONNECTED){
     Serial.println("WiFi not connected");
@@ -632,7 +640,8 @@ void setup() {
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     Serial.print("Auto connecting to WiFi");
     unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) //ค่าเดิม10000{
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) //ค่าเดิม10000
+    {
       delay(500);
       Serial.print(".");
     }
@@ -642,7 +651,7 @@ void setup() {
     } else {
       Serial.println("\n Auto WiFi Failed");
     }
-  
+}
 
 
 
@@ -745,7 +754,16 @@ void setup() {
         }  
     server.send(200, "text/plain", "OK");
   });
-
+  
+  server.on("/getemail",HTTP_GET,[](){
+    String json = "{";
+    json += "\"e1\":\"" + loadEmail(EMAIL1_ADDR) + "\",";
+    json += "\"e2\":\"" + loadEmail(EMAIL2_ADDR) + "\",";
+    json += "\"e3\":\"" + loadEmail(EMAIL3_ADDR) + "\",";
+    json += "\"e4\":\"" + loadEmail(EMAIL4_ADDR) + "\" ";
+    json += "}";
+    server.send(200,"application/json",json);
+  });
 
   server.on("/rename", HTTP_POST, []() {
     String newName = server.arg("name");
