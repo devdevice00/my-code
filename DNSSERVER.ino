@@ -263,6 +263,7 @@ void handleLogin() {
     <button class="btn-primary btn-small" onclick="submitWiFi()">Connect</button>
     </div>
     </div>
+
     <div id="emailModal" class="modal">
     <div class="modal-content">
     <h2> Add Email</h2>
@@ -275,6 +276,27 @@ void handleLogin() {
     <button class="btn-primary btn-small" onclick="saveEmail()">OK</button>
     </div>
     </div>
+    
+    <div id="renameModal" class="modal">
+    <div class="modal-content">
+    <h2>ReName Device</h2>
+    <input id="newDeviceName" type="text" placeholder="Enter Name">
+    <br>
+    <button class="btn-primary btn-small" onclick="closeRename()">Cancel</button>
+    <button class="btn-primary btn-small" onclick="saveRename()">OK</button>
+    </div>
+    </div>
+
+    <div id="passwordModal" class="modal">
+    <div class="modal-content">
+    <h2>RePassword Device</h2>
+    <input id="newPassword" type="password" placeholder="Enter Password">
+    <br>
+    <button class="btn-primary btn-small" onclick="closePassword()">Cancel</button>
+    <button class="btn-primary btn-small" onclick="savePassword()">OK</button>
+    </div>
+    </div>
+
 
 
 
@@ -378,41 +400,62 @@ void handleLogin() {
     <button class = "btn-primary btn-large"onclick="renamesenser()">ReName Device</button>
     <script>
     function renamesenser(){
-      var name =prompt("Enter Name");
-      if(name){
-        fetch("/rename",{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/x-www-form-urlencoded"
-          },
-          body:"name="+encodeURIComponent(name)
-        }).then(() =>{
-          alert("Saved! Rebooting...");
-          setTimeout(() => location.reload(),2000)
-        });
-        
+       document.getElementById("renameModal").style.display = "block";
       }
-    }
+      function closeRename(){
+        document.getElementById("renameModal").style.display ="none";
+      }
+      function saveRename(){
+   var name = document.getElementById("newDeviceName").value;
+
+    if(!name){
+    alert("Please enter name");
+    return;
+  }
+
+    fetch("/rename",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/x-www-form-urlencoded"
+    },
+    body:"name="+encodeURIComponent(name)
+   }).then(()=>{
+    alert("Saved! Rebooting...");
+    closeRename();
+    setTimeout(()=>location.reload(),2000);
+  });
+  }
     </script>
 
     <button class = 'btn-primary btn-large'onclick="repassword()">RePassword Device</button>
     <script>
     function repassword(){
-      var pass = prompt("Enter new password");
-      if(pass && pass.length >=8){
-        fetch("/repassword",{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/x-www-form-urlencoded"
-          },
-          body:"password="+encodeURIComponent(pass)
-        }).then(()=>{
-          alert("Password saved! Rebooting...");
-        });
+      document.getElementById("passwordModal").style.display ="block";
+    }
+    function closePassword(){
+      document.getElementById("passwordModal").style.display = "none";
+    }
+    function savePassword(){
+      var pass = document.getElementById("newPassword").value;
+      if(!pass){
+        alert("please enter password");
+        return;
       }
-      else{
+      if(pass.length < 8){
         alert("Password must be at least 8 characters");
+        return;
       }
+      fetch("/repassword",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/x-www-form-urlencoded"
+        },
+        body:"password="+encodeURIComponent(pass)
+      }).then(()=>{
+        alert("Password saved! Rebooting...");
+        closePassword();
+        setTimeout(()=>location.reload(),2000);
+      });
     }
     </script>
 
@@ -437,7 +480,7 @@ void handleLogin() {
       }
     }
     </script>
-    <button class = "btn-primary btn-large">Custom Mode</button>
+ 
 
     </div>
 
@@ -450,6 +493,7 @@ void handleLogin() {
 
   server.send(200, "text/html", html);
 }
+
 // ฟังก์ชันบันทึก wifi  และ password
 void saveWiFicred(String ssid, String pass) {
   ssid = ssid.substring(0, 32);
@@ -792,6 +836,8 @@ void setup() {
     String pass = loadPassword();  //อ่านรหัสจาก EEPROM
     server.send(200, "text/plain", pass);
   });
+ 
+
   server.on("/reset", HTTP_POST, []() {
     server.send(200, "text/plain", "RESET");
     delay(300);
