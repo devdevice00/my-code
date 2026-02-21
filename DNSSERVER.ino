@@ -19,12 +19,13 @@ String deviceId;
 #define SSID_ADDR 0
 #define PASS_ADDR 40
 #define LANG_ADDR 80
+
 #define WiFi_SSID_ADDR 120
-#define WIFI_PASS_ADDR 140
-#define EMAIL1_ADDR 180
-#define EMAIL2_ADDR 220
-#define EMAIL3_ADDR 260
-#define EMAIL4_ADDR 300
+#define WIFI_PASS_ADDR 160
+#define EMAIL1_ADDR 200
+#define EMAIL2_ADDR 240
+#define EMAIL3_ADDR 280
+#define EMAIL4_ADDR 320
 
 
 String pageHeader = R"HTML(
@@ -84,6 +85,8 @@ String pageHeader = R"HTML(
       padding: 40px 70px;
       font-size: 30px;
       margin-bottom: 10px;
+      width: 100%;
+      box-sizing: border-box;
       
     }
     .btn-small{
@@ -114,7 +117,7 @@ String pageHeader = R"HTML(
     }
     .modal-content{
       background:#fff;
-      margin: 15% auto;
+      margin: 50% auto;
       padding: 20px;
       width: 90%;
       max-width: 400px;
@@ -211,8 +214,75 @@ void handleLogin() {
 
   html += R"HTML(
     <script>
-    alert("Login Success 🎉 Welcome!");
+    function showAlert(msg){
+  var existing = document.getElementById("alertOverlay");
+  if(existing) document.body.removeChild(existing);   
+  var overlay = document.createElement("div");
+  overlay.id = "alertOverlay";
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.background = "rgba(0,0,0,0.5)";
+  overlay.style.zIndex = "99999";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "flex-start";
+  overlay.style.paddingTop = "550px";
+  overlay.style.justifyContent = "center";
+
+  var box = document.createElement("div");
+  box.style.background = "white";
+  box.style.borderRadius = "12px";
+  box.style.padding = "40px";
+  box.style.textAlign = "center";
+  box.style.width = "80%";
+  box.style.maxWidth = "350px";
+  box.style.boxShadow = "0 4px 20px rgba(0,0,0,0.5)";
+
+  box.innerHTML = `
+    <p style="font-size:20px;margin-bottom:30px;">${msg}</p>
+
+    <div style = "text-align:right;">
+    <button class="btn-primary btn-small"
+    onclick="document.body.removeChild(document.getElementById('alertOverlay'))">
+    OK
+    </button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}  
     </script>
+
+    <script>   
+  function showSuccess(msg1, msg2){
+  var overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.top = "0";
+  overlay.style.left = "0";
+  overlay.style.width = "100%";
+  overlay.style.height = "100%";
+  overlay.style.background = "rgba(0,0,0,0.5)";
+  overlay.style.zIndex = "99999";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "flex-start";
+  overlay.style.paddingTop = "480px";
+  overlay.style.justifyContent = "center";
+
+  var box = document.createElement("div");
+  box.style.cssText = "background:white;border-radius:12px;padding:80px;text-align:center;width:90%;max-width:450px;box-shadow:0 4px 20px rgba(0,0,0,0.5);";
+  box.innerHTML = `
+    <div style="font-size:60px;margin-bottom:20px;">✅</div>
+    <p style="font-size:24px;font-weight:bold;margin:0;">${msg1}</p>
+    <p style="font-size:20px;color:#666;margin-top:10px;">${msg2}</p>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+    </script>
+
     <p id="netStatus" style="
     position: fixed;
     top: 0px;
@@ -245,6 +315,15 @@ void handleLogin() {
     setInterval(checkInternetStatus,3000);
     </script>
 
+
+
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+
     <h1>Welcome</h1> 
     <h1>Setting</h1>
     <h1 id= "deviceName" style="margin-top:50px;">Name:
@@ -252,7 +331,7 @@ void handleLogin() {
   html += ssid;
   html += R"HTML(
       </h1>
-
+ 
     <div id="wifiModal" class="modal">
     <div class ="modal-content">
     <h2>Connect WiFi</h2>
@@ -287,7 +366,7 @@ void handleLogin() {
     </div>
     </div>
 
-    <div id="passwordModal" class="modal">
+    <div id="repasswordModal" class="modal">
     <div class="modal-content">
     <h2>RePassword Device</h2>
     <input id="newPassword" type="password" placeholder="Enter Password">
@@ -297,9 +376,16 @@ void handleLogin() {
     </div>
     </div>
 
-
-
-
+    <div id="resetModal" class="modal">
+    <div class="modal-content">
+    <h2>Reset Device</h2>
+    <p style="font-size:20px;margin:20px 0;">
+     Are you sure you want to reset?
+     </p>
+     <button class="btn-primary btn-small" onclick="closeReset()">Cancel</button>
+     <button class="btn-primary btn-small" onclick="confirmReset()">OK</button>
+     </div>
+     </div>
 
     <div class= 'form-box-welcome'>
     <button class = "btn-primary btn-large"onclick="openWiFi()">Connect Internet</button>
@@ -315,12 +401,12 @@ void handleLogin() {
       var pass = document.getElementById("wifi_pass").value;
      
       if(!ssid){
-        alert("Please enter SSID");
+        showAlert("Please enter SSID");
         return;
       }
 
        if(pass.length < 8){
-        alert("password must be at least 8 characters");
+        showAlert("password must be at least 8 characters");
         return;
       }
 
@@ -333,7 +419,7 @@ void handleLogin() {
       })
       .then(res => res.text())
       .then(msg =>{
-        alert(msg);
+         showAlert(msg);
         closeWiFi();
       });
     }
@@ -373,7 +459,7 @@ void handleLogin() {
 
        for(let e of emails){
         if(!isValidEmail(e)){
-          alert("Email ไม่ถูกต้อง"+e);
+           showAlert("Email ไม่ถูกต้อง"+e);
           return;
         }
         }
@@ -387,7 +473,7 @@ void handleLogin() {
                   "&e3="+encodeURIComponent(e3)+
                   "&e4="+encodeURIComponent(e4)
           }).then(() =>{
-            alert("บันทึก Email แล้ว");
+             showAlert("บันทึก Email แล้ว");
         
           closeEmail();
         
@@ -409,7 +495,7 @@ void handleLogin() {
    var name = document.getElementById("newDeviceName").value;
 
     if(!name){
-    alert("Please enter name");
+    showAlert("Please enter name");
     return;
   }
 
@@ -420,7 +506,8 @@ void handleLogin() {
     },
     body:"name="+encodeURIComponent(name)
    }).then(()=>{
-    alert("Saved! Rebooting...");
+    
+    showSuccess("Save Name Complete!","Rebooting...");
     closeRename();
     setTimeout(()=>location.reload(),2000);
   });
@@ -430,19 +517,19 @@ void handleLogin() {
     <button class = 'btn-primary btn-large'onclick="repassword()">RePassword Device</button>
     <script>
     function repassword(){
-      document.getElementById("passwordModal").style.display ="block";
+      document.getElementById("repasswordModal").style.display ="block";
     }
     function closePassword(){
-      document.getElementById("passwordModal").style.display = "none";
+      document.getElementById("repasswordModal").style.display = "none";
     }
     function savePassword(){
       var pass = document.getElementById("newPassword").value;
       if(!pass){
-        alert("please enter password");
+         showAlert("please enter password");
         return;
       }
       if(pass.length < 8){
-        alert("Password must be at least 8 characters");
+         showAlert("Password must be at least 8 characters");
         return;
       }
       fetch("/repassword",{
@@ -452,33 +539,34 @@ void handleLogin() {
         },
         body:"password="+encodeURIComponent(pass)
       }).then(()=>{
-        alert("Password saved! Rebooting...");
+
+       showSuccess("Save Password Complete!","Rebooting...");
         closePassword();
         setTimeout(()=>location.reload(),2000);
       });
     }
     </script>
 
-    <button class = 'btn-primary btn-large'onclick="showPassword()">Show Password Device</button>
+    
+
+    <button class = 'btn-primary btn-large' onclick="openReset()">Reset Device</button>
     <script>
-    function showPassword(){
-      fetch("/showpassword")
-      .then(res=> res.text())
-      .then(pass=>{
-        alert("WiFi Password:"+ pass);
-      });
+    function openReset(){
+      document.getElementById("resetModal").style.display = "block";
     }
-    </script>
-    <button class = 'btn-primary btn-large' onclick="reset()">Reset Device</button>
-    <script>
-    function reset(){
-      if(confirm("Are you sure you want to reset?")){
+    function closeReset(){
+      document.getElementById("resetModal").style.display ="none";
+    }
+    function confirmReset(){
+      
       fetch("/reset",{method:"POST"})
       .then(()=>{
-        alert("Reset complete! Rebooting...");
+         
+        showSuccess("Reset Complete!","Rebooting...");
+        
       });
       }
-    }
+    
     </script>
  
 
@@ -832,10 +920,10 @@ void setup() {
       server.send(400, "text/plain", "PASSWORD_TOO_SHORT");
     }
   });
-  server.on("/showpassword", HTTP_GET, []() {
-    String pass = loadPassword();  //อ่านรหัสจาก EEPROM
-    server.send(200, "text/plain", pass);
-  });
+  // server.on("/showpassword", HTTP_GET, []() {
+  //   String pass = loadPassword();  //อ่านรหัสจาก EEPROM
+  //   server.send(200, "text/plain", pass);
+  // });
  
 
   server.on("/reset", HTTP_POST, []() {
