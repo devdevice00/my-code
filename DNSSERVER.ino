@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <esp_task_wdt.h>
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
@@ -11,9 +12,10 @@ DNSServer dnsServer;
 //ค่าเริมต้น
 String ssid = "SENSER-AP";
 String apPassword = "12345678";
-char currentLang = 'T';
+char currentLang = 'E',savedLang;
 //
-String deviceId;
+String deviceId,lang1,lang0;
+
 //
 #define EEPROM_SIZE 512
 #define SSID_ADDR 0
@@ -90,8 +92,13 @@ String pageHeader = R"HTML(
       
     }
     .btn-small{
-      padding: 15px 20px;
       font-size: 18px;
+      width: 100px;   /* กว้างคงที่ */
+      height: 70px;   /* สูงคงที่ */      
+      box-sizing: border-box;
+      line-height:70px;
+      padding: 0;
+      text-align: center;
     }
 
     .lang{
@@ -154,8 +161,8 @@ String pageFooter = R"HTML(
 
 <div class="lang">
 
-<a class="btn-primary btn-small" href="/lang/th">TH</a>
-<a class="btn-primary btn-small" href="/lang/en">EN</a>
+<a id="langT"class="btn-primary btn-small" href="/lang/th"></a>
+<a id="langE"class="btn-primary btn-small" href="/lang/en"></a>
 
 </div>
 </body></html>
@@ -163,56 +170,163 @@ String pageFooter = R"HTML(
 
 
 
-//ปุ่ม html
-//  String pageFooter1 = R"HTML(
-//  <br><hr>
-//  <a class='btn' href='/lang/th'>🇹🇭 TH</a>
-//  <a class='btn' href='/lang/en'>🇺🇸 EN</a>
-//  </div></div>
-//  </body></html>
-//  )HTML";
-
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
-
-// void handleRoot() {
-
-//   String html = pageHeader;
-
-//   html += "<h1 style='margin-top: 50px;'>Welcome to Pir senser</h1>";
-
-//   // อันนี้ดี html += "<h1 style='position:absolute; left:0; top:20px;'>Hello World</h1>";
-
-//   //html += "<h1 style='float:right; margin:0;'>Hello World</h1>";
-//   //html += "<h1 style=' text-align:right;'>Hello World</h1>";
-//   //html += "<h1 style=' position:absolute; top:100px; left:50px; '>Hello Word </h4>";
-//   html += "<form action='/login' method='POST'>";
-//   html += "<div class='form-box'>";
-//   html += "<input type= 'text' name='username' placeholder = 'Name'><br>";
-//   html += "<input type= 'text'name='password' placeholder = 'Password'><br>";
-//   html += "<input type= 'text' name= 'email' placeholder = 'Email'><br><br>";
-//   html += "<button class = 'btn-primary btn-large' type='submit'>Login</button>";
-//   html += "</div>";
-//   html += "</form>";
-//   html += pageFooter;
-
-//   server.send(200, "text/html", html);
-// }
 
 void handleLogin() {
-
-  // String username = server.arg("username");
-  // String password = server.arg("password");
-  // String email = server.arg("email");
-
-  // Serial.println("Username:" + username);
-  // Serial.println("Password:" + password);
-  // Serial.println("Email:" + email);
+ 
 
   String html = pageHeader;
-
+  html += "<script>var LANG = '" + String(currentLang) + "';</script>";
   html += R"HTML(
+    <script>
+     var T = {
+    welcome: "ยินดีต้อนรับ",
+    setting: "การตั้งค่า",
+    
+    connectInternet: "เชื่อมต่ออินเตอร์เน็ต",
+    addEmail: "เพิ่ม Email",
+    renameDevice: "เปลี่ยนชื่ออุปกรณ์",
+    repassword: "เปลี่ยนรหัสผ่าน",
+    resetDevice: "รีเซ็ตอุปกรณ์",
+    
+    statusinterneton:  "🟢เชื่อมต่ออินเทอร์เน็ต",
+    statusinternetoff: "🔴ไม่เชื่อมต่ออินเทอร์เน็ต",
+    
+    langthai:"ไทย",
+    langeng:"อังกฤษ",
+   
+    enterssid:"กรอก SSID",
+    enterpassword:"กรอก Password",
+    cancel:"ยกเลิก",
+    connect:"เชื่อมต่อ",
+    enterSSID: "กรุณาใส่ SSID",
+    passShort: "รหัสผ่านต้องมีอย่างน้อย 8 ตัว",
+ 
+    enteremail1:"อีเมล 1",
+    enteremail2:"อีเมล 2",
+    enteremail3:"อีเมล 3",
+    enteremail4:"อีเมล 4",
+    okaddemail:"ตกลง",
+    cancelAddemail:"ยกเลิก",
+    invalidemail:"❌ อีเมลไม่ถูกต้อง",
+    saveemaildone:"✅ บันทึกอีเมลแล้ว",
+   
+    enterName: "กรอกชื่อ",
+    okrename: "ตกลง",
+    cancelrename:"ยกเลิก",
+    pleaseentername:"กรุณากรอกชื่อ",
+    savenamedone:"บันทึกชื่อสำเร็จ!",
+    rebooting: "กำลังรีบูท...",
+        
+    enterPass: "กรอกรหัสผ่าน",
+    okrepass:"ตกลง",
+    cancelrepass:"ยกเลิก",
+    savepassdone: "บันทึกรหัสผ่านสำเร็จ!",
+    pleaseenterpass:"กรุณากรอกรหัสผ่าน",
+
+    okreset: "ตกลง",
+    cancelreset: "ยกเลิก",
+    confirmReset: "คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ต?",
+    resetDone: "รีเซ็ตสำเร็จ!",
+  };
+  var E = {
+    
+    welcome: "Welcome",
+    setting: "Setting",
+    
+    connectInternet: "Connect Internet",
+    addEmail: "Add Email",
+    renameDevice: "ReName Device",
+    repassword: "RePassword Device",
+    resetDevice: "Reset Device",
+    
+    statusinterneton:  "🟢Connect internet",
+    statusinternetoff: "🔴Not connect internet",
+    
+    langthai:"THAI",
+    langeng:"ENG",
+
+    enterssid:"Enter SSID",
+    enterpassword:"Enter Password",
+    cancel:"Cancel",
+    connect:"Connect",
+    enterSSID: "Please enter SSID",
+    passShort: "Password must be at least 8 characters",
+       
+    enteremail1:"Email 1",
+    enteremail2:"Email 2",
+    enteremail3:"Email 3",
+    enteremail4:"Email 4",
+    okaddemail:"OK",
+    cancelAddemail:"Cancel",
+    invalidemail:"❌ Email is incorrect",
+    saveemaildone:"✅ Email saved",
+
+    enterName: "Enter Name",
+    okrename: "OK",
+    cancelrename:"Cancel",
+    pleaseentername:"Please enter Name",
+    savenamedone:"Save Name Complete!",
+    rebooting: "Rebooting...",
+
+    enterPass: "Enter Password",
+    okrepass:"OK",
+    cancelrepass:"Cancel",
+    pleaseenterpass:"Please enter Password",
+    savepassdone: "Save Password Complete!",
+
+    okreset: "OK",
+    cancelreset: "Cancel",
+    confirmReset: "Are you sure you want to reset?",
+    resetDone: "Reset Complete!"
+  };
+  //สร้างตัวแปรเปลี่ยนภาษา
+  var L = (LANG === 'T')? T:E;
+
+  window.onload = function(){  
+    //btn
+    document.getElementById("txtWelcome").innerText = L.welcome;
+    document.getElementById("txtSetting").innerText = L.setting;
+    document.getElementById("btnconnectWifi").innerText = L.connectInternet;
+    document.getElementById("btnAddemail").innerText = L.addEmail;
+    document.getElementById("btnRename").innerText = L.renameDevice;
+    document.getElementById("btnRepass").innerText = L.repassword;
+    document.getElementById("btnReset").innerText = L.resetDevice;
+    //lang
+    document.getElementById("langT").innerText = L.langthai;
+    document.getElementById("langE").innerText = L.langeng;
+    //overlayของ connectinternet
+    document.getElementById("netStatus").innerText = L.statusinternetoff;
+    document.getElementById("txtconnectWifi").innerText = L.connectInternet;
+    document.getElementById("wifi_ssid").placeholder = L.enterssid;
+    document.getElementById("wifi_pass").placeholder = L.enterpassword;
+    document.getElementById("btncancel").innerText = L.cancel;
+    document.getElementById("btnconnect").innerText = L.connect;
+    //overlayของ Add Email
+    document.getElementById("txtAddemail").innerText = L.addEmail;
+    document.getElementById("email1").placeholder = L.enteremail1;
+    document.getElementById("email2").placeholder = L.enteremail2;
+    document.getElementById("email3").placeholder = L.enteremail3;
+    document.getElementById("email4").placeholder = L.enteremail4;
+    document.getElementById("btnokaddemail").innerText = L.okaddemail;
+    document.getElementById("btncanceladdemail").innerText = L.cancelAddemail;
+    //overlayของ ReName Device
+    document.getElementById("txtRename").innerText = L.renameDevice;
+    document.getElementById("newDeviceName").placeholder = L.enterName;
+    document.getElementById("btnokrename").innerText = L.okrename;
+    document.getElementById("btncancelrename").innerText = L.cancelrename;
+    //overlayของ Repassword
+    document.getElementById("txtRepass").innerText = L.repassword;
+    document.getElementById("newPassword").placeholder = L.enterPass;
+    document.getElementById("btnokrepass").innerText = L.okrepass;
+    document.getElementById("btncancelrepass").innerText = L.cancelrepass;
+    //overlayของ reset
+    document.getElementById("txtReset").innerText = L.resetDevice;
+    document.getElementById("txtreset").innerText = L.confirmReset;
+    document.getElementById("btnokreset").innerText = L.okreset;
+    document.getElementById("btncancelreset").innerText = L.cancelreset;
+  };  
+
+    </script>
     <script>
     function showAlert(msg){
   var existing = document.getElementById("alertOverlay");
@@ -292,7 +406,7 @@ void handleLogin() {
     font-size: 20px;
     z-index: 9999;
     ">
-      Not connect internet
+      
     </p>
 
     <script>
@@ -302,11 +416,11 @@ void handleLogin() {
       .then(status => {
         let label = document.getElementById("netStatus");
         if(status === "connected"){
-          label.innerText = "🟢Connect internet";
+          label.innerText = L.statusinterneton;
           label.style.color ="green";
         }
         else{
-          label.innerText = "🔴Not connect internet";
+          label.innerText = L.statusinternetoff;
           label.style.color = "red";
         }
       })
@@ -324,71 +438,74 @@ void handleLogin() {
     <br>
     <br>
 
-    <h1>Welcome</h1> 
-    <h1>Setting</h1>
+    <h1 id="txtWelcome"></h1> 
+    <h1 id="txtSetting"></h1>
     <h1 id= "deviceName" style="margin-top:50px;">Name:
     )HTML";
   html += ssid;
   html += R"HTML(
       </h1>
- 
+        <!-- Modalต่างๆ -->
     <div id="wifiModal" class="modal">
     <div class ="modal-content">
-    <h2>Connect WiFi</h2>
-    <input id="wifi_ssid" type="text" placeholder="WiFi SSID">
-    <input id="wifi_pass" type="password" placeholder="WiFi Password">
+    <h2 id="txtconnectWifi"></h2>
+    <input id="wifi_ssid" type="text">
+    <input id="wifi_pass" type="password">
     <br>
-    <button class="btn-primary btn-small" onclick="closeWiFi()">Cancel</button>
-    <button class="btn-primary btn-small" onclick="submitWiFi()">Connect</button>
+    <button id="btncancel" class="btn-primary btn-small" onclick="closeWiFi()"></button>
+    <button id="btnconnect"class="btn-primary btn-small" onclick="submitWiFi()"></button>
     </div>
     </div>
 
     <div id="emailModal" class="modal">
     <div class="modal-content">
-    <h2> Add Email</h2>
-    <input id="email1" type="email"placeholder="Email 1">
-    <input id="email2" type="email"placeholder="Email 2">
-    <input id="email3" type="email"placeholder="Email 3">
-    <input id="email4" type="email"placeholder="Email 4">
+    <h2 id="txtAddemail"></h2>
+    <input id="email1" type="email">
+    <input id="email2" type="email">
+    <input id="email3" type="email">
+    <input id="email4" type="email">
     <br>
-    <button class="btn-primary btn-small" onclick="closeEmail()">Cancel</button> 
-    <button class="btn-primary btn-small" onclick="saveEmail()">OK</button>
+    <button id="btncanceladdemail"class="btn-primary btn-small" onclick="closeEmail()"></button> 
+    <button id="btnokaddemail"class="btn-primary btn-small" onclick="saveEmail()"></button>
     </div>
     </div>
     
     <div id="renameModal" class="modal">
     <div class="modal-content">
-    <h2>ReName Device</h2>
-    <input id="newDeviceName" type="text" placeholder="Enter Name">
+    <h2 id="txtRename"></h2>
+    <input id="newDeviceName" type="text">
     <br>
-    <button class="btn-primary btn-small" onclick="closeRename()">Cancel</button>
-    <button class="btn-primary btn-small" onclick="saveRename()">OK</button>
+    <button id="btncancelrename"class="btn-primary btn-small" onclick="closeRename()"></button>
+    <button id="btnokrename"class="btn-primary btn-small" onclick="saveRename()"></button>
     </div>
     </div>
 
     <div id="repasswordModal" class="modal">
     <div class="modal-content">
-    <h2>RePassword Device</h2>
-    <input id="newPassword" type="password" placeholder="Enter Password">
+    <h2 id="txtRepass"></h2>
+    <input id="newPassword" type="password">
     <br>
-    <button class="btn-primary btn-small" onclick="closePassword()">Cancel</button>
-    <button class="btn-primary btn-small" onclick="savePassword()">OK</button>
+    <button id="btncancelrepass"class="btn-primary btn-small" onclick="closePassword()"></button>
+    <button id="btnokrepass"class="btn-primary btn-small" onclick="savePassword()"></button>
     </div>
     </div>
 
     <div id="resetModal" class="modal">
     <div class="modal-content">
-    <h2>Reset Device</h2>
-    <p style="font-size:20px;margin:20px 0;">
-     Are you sure you want to reset?
+    <h2 id="txtReset"></h2>
+    <p id="txtreset" style="font-size:20px;margin:20px 0;">
+
      </p>
-     <button class="btn-primary btn-small" onclick="closeReset()">Cancel</button>
-     <button class="btn-primary btn-small" onclick="confirmReset()">OK</button>
+     <button id="btncancelreset"class="btn-primary btn-small" onclick="closeReset()"></button>
+     <button id="btnokreset"class="btn-primary btn-small" onclick="confirmReset()"></button>
      </div>
      </div>
 
+
+
+      <!-- ปุ่มและฟังก์ชันการทำงานในส่วนต่างๆ -->
     <div class= 'form-box-welcome'>
-    <button class = "btn-primary btn-large"onclick="openWiFi()">Connect Internet</button>
+    <button id="btnconnectWifi" class = "btn-primary btn-large"onclick="openWiFi()"></button>
     <script>
     function openWiFi(){
       document.getElementById("wifiModal").style.display = "block";      
@@ -401,12 +518,12 @@ void handleLogin() {
       var pass = document.getElementById("wifi_pass").value;
      
       if(!ssid){
-        showAlert("Please enter SSID");
+        showAlert(L.enterSSID);
         return;
       }
 
        if(pass.length < 8){
-        showAlert("password must be at least 8 characters");
+        showAlert(L.passShort);
         return;
       }
 
@@ -424,7 +541,7 @@ void handleLogin() {
       });
     }
     </script>
-    <button class = "btn-primary btn-large"onclick="openEmail()">Add email</button>
+    <button id="btnAddemail"class = "btn-primary btn-large"onclick="openEmail()"></button>
     <script>
     function openEmail(){
       fetch("/getemail")
@@ -459,7 +576,7 @@ void handleLogin() {
 
        for(let e of emails){
         if(!isValidEmail(e)){
-           showAlert("Email ไม่ถูกต้อง"+e);
+           showAlert(L.invalidemail);
           return;
         }
         }
@@ -473,7 +590,7 @@ void handleLogin() {
                   "&e3="+encodeURIComponent(e3)+
                   "&e4="+encodeURIComponent(e4)
           }).then(() =>{
-             showAlert("บันทึก Email แล้ว");
+             showAlert(L.saveemaildone);
         
           closeEmail();
         
@@ -483,7 +600,7 @@ void handleLogin() {
         
     }
     </script>
-    <button class = "btn-primary btn-large"onclick="renamesenser()">ReName Device</button>
+    <button id="btnRename"class = "btn-primary btn-large"onclick="renamesenser()"></button>
     <script>
     function renamesenser(){
        document.getElementById("renameModal").style.display = "block";
@@ -495,7 +612,7 @@ void handleLogin() {
    var name = document.getElementById("newDeviceName").value;
 
     if(!name){
-    showAlert("Please enter name");
+    showAlert(L.pleaseentername);
     return;
   }
 
@@ -507,14 +624,14 @@ void handleLogin() {
     body:"name="+encodeURIComponent(name)
    }).then(()=>{
     
-    showSuccess("Save Name Complete!","Rebooting...");
+    showSuccess(L.savenamedone,L.rebooting);
     closeRename();
     setTimeout(()=>location.reload(),2000);
   });
   }
     </script>
 
-    <button class = 'btn-primary btn-large'onclick="repassword()">RePassword Device</button>
+    <button id="btnRepass"class = 'btn-primary btn-large'onclick="repassword()"></button>
     <script>
     function repassword(){
       document.getElementById("repasswordModal").style.display ="block";
@@ -525,11 +642,11 @@ void handleLogin() {
     function savePassword(){
       var pass = document.getElementById("newPassword").value;
       if(!pass){
-         showAlert("please enter password");
+         showAlert(L.pleaseenterpass);
         return;
       }
       if(pass.length < 8){
-         showAlert("Password must be at least 8 characters");
+         showAlert(L.passShort);
         return;
       }
       fetch("/repassword",{
@@ -540,7 +657,7 @@ void handleLogin() {
         body:"password="+encodeURIComponent(pass)
       }).then(()=>{
 
-       showSuccess("Save Password Complete!","Rebooting...");
+       showSuccess(L.savepassdone,L.rebooting);
         closePassword();
         setTimeout(()=>location.reload(),2000);
       });
@@ -549,7 +666,7 @@ void handleLogin() {
 
     
 
-    <button class = 'btn-primary btn-large' onclick="openReset()">Reset Device</button>
+    <button id="btnReset" class = 'btn-primary btn-large' onclick="openReset()"></button>
     <script>
     function openReset(){
       document.getElementById("resetModal").style.display = "block";
@@ -561,8 +678,8 @@ void handleLogin() {
       
       fetch("/reset",{method:"POST"})
       .then(()=>{
-         
-        showSuccess("Reset Complete!","Rebooting...");
+         closeReset(); 
+        showSuccess(L.resetDone,L.rebooting);
         
       });
       }
@@ -750,10 +867,17 @@ void factoryReset() {
 
 //
 void setup() {
+  esp_task_wdt_init(10,true);
+  esp_task_wdt_add(NULL);
   server.on("/generate_204",handleLogin);         //Android
   server.on("/hotspot-detect.html",handleLogin);  //ios
   server.on("/fwlink", handleLogin);               //Windows
   EEPROM.begin(EEPROM_SIZE);
+  // eeprom ของภาษา
+  savedLang = EEPROM.read(LANG_ADDR);
+    if(savedLang == 'T' || savedLang == 'E'){
+      currentLang = savedLang;
+    }
   Serial.begin(115200);
   Serial.println("WiFi Password Loaded:" + apPassword);
   WiFi.mode(WIFI_AP_STA);
@@ -776,6 +900,7 @@ void setup() {
     {
       delay(500);
       Serial.print(".");
+      esp_task_wdt_reset();
     }
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\n Auto WiFi Connected");
@@ -789,13 +914,17 @@ void setup() {
 
   server.on("/lang/th", []() {
     currentLang = 'T';
+    EEPROM.write(LANG_ADDR,'T');
+    EEPROM.commit();
     Serial.println("Language: TH");
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
+    server.send(302, "text/plain", "");  
   });
 
   server.on("/lang/en", []() {
     currentLang = 'E';
+    EEPROM.write(LANG_ADDR,'E');
+    EEPROM.commit();
     Serial.println("Language: EN");
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
@@ -831,18 +960,31 @@ void setup() {
       delay(500);
       Serial.print(".");
       yield();
+      esp_task_wdt_reset();
     }
+
+    
+
+    if(currentLang == 'E'){
+      lang1 = "✅ Connected to Internet!";
+      lang0 = "❌ Connection Failed";
+    }
+    else{
+      lang1 = "✅ เชื่อมต่อกับอินเทอร์เน็ตได้แล้ว!";
+      lang0 = "❌ การเชื่อมต่อล้มเหลว";
+    }
+    
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\nWiFi Connected!");
       Serial.println(WiFi.localIP());
-      server.send(200, "text/plain", "✅ Connected to Internet!");
+      server.send(200, "text/plain", lang1);
       // String e1 = loadEmail(EMAIL1_ADDR);
       //   if(e1.length()>5){
       //     sendEmailFromESP(e1,ssid);
       //   }
     } else {
       Serial.println("\nWiFi Failed!");
-      server.send(200, "text/plain", "❌ Connection Failed");
+      server.send(200, "text/plain", lang0);
     }
   });
   server.on("/status",HTTP_GET,[](){
@@ -920,11 +1062,6 @@ void setup() {
       server.send(400, "text/plain", "PASSWORD_TOO_SHORT");
     }
   });
-  // server.on("/showpassword", HTTP_GET, []() {
-  //   String pass = loadPassword();  //อ่านรหัสจาก EEPROM
-  //   server.send(200, "text/plain", pass);
-  // });
- 
 
   server.on("/reset", HTTP_POST, []() {
     server.send(200, "text/plain", "RESET");
@@ -938,7 +1075,7 @@ void setup() {
   Serial.println("Server started at IP:" + WiFi.softAPIP().toString());
 }
 void loop() {
-
+  esp_task_wdt_reset();
   dnsServer.processNextRequest();
   server.handleClient();
 }
