@@ -10,9 +10,11 @@ const byte DNS_PORT = 53;
 WebServer server(80);
 DNSServer dnsServer;
 //ค่าเริมต้น
-String ssid = "SENSER-AP";
-String apPassword = "12345678";
-char currentLang = 'E',savedLang;
+ String ssid = "SENSER-AP";
+ String apPassword = "12345678";
+ const String defaultssid = "SENSER-AP";
+ const String defaultpass = "12345678";
+ char currentLang = 'E',savedLang;
 //
 String deviceId,lang1,lang0;
 
@@ -208,6 +210,7 @@ void handleLogin() {
     okaddemail:"ตกลง",
     cancelAddemail:"ยกเลิก",
     invalidemail:"❌ อีเมลไม่ถูกต้อง",
+    pleaseenteremail:"กรุณากรอกอีเมล",
     saveemaildone:"✅ บันทึกอีเมลแล้ว",
    
     enterName: "กรอกชื่อ",
@@ -259,6 +262,7 @@ void handleLogin() {
     okaddemail:"OK",
     cancelAddemail:"Cancel",
     invalidemail:"❌ Email is incorrect",
+    pleaseenteremail:"Please enter Email",
     saveemaildone:"✅ Email saved",
 
     enterName: "Enter Name",
@@ -397,6 +401,38 @@ void handleLogin() {
 }
     </script>
 
+    <script>
+    function showLoading(msg){
+      var existing = document.getElementById("alertOverlay");
+      if(existing) document.body.removeChild(existing);
+      var overlay = document.createElement("div");
+      overlay.id = "alertOverlay";
+      overlay.style.position = "fixed";
+      overlay.style.top = "0";
+      overlay.style.left = "0";
+      overlay.style.width = "100%";
+      overlay.style.height = "100%";
+      overlay.style.background = "rgba(0,0,0,0.5)";
+      overlay.style.zIndex = "99999";
+      overlay.style.display="flex";
+      overlay.style.alignItems = "flex-start";
+      overlay.style.paddingTop = "550px";
+      overlay.style.justifyContent = "center";
+      
+      var box = document.createElement("div");
+      box.style.background = "white";
+      box.style.borderRadius = "12px";
+      box.style.padding = "40px";
+      box.style.textAlign = "center";
+      box.style.width = "80%";
+      box.style.maxWidth = "350px"; 
+      box.style.boxShadow = "0 4px 20px rgba(0,0,0,0.5)";
+      box.innerHTML = `<p style="font-size:20px;">${msg}</p>`;
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+    }
+    </script>
+
     <p id="netStatus" style="
     position: fixed;
     top: 0px;
@@ -508,6 +544,12 @@ void handleLogin() {
     <button id="btnconnectWifi" class = "btn-primary btn-large"onclick="openWiFi()"></button>
     <script>
     function openWiFi(){
+        fetch("/getwifi")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("wifi_ssid").value = data.ssid || "";
+          document.getElementById("wifi_pass").value = data.pass || "";
+        });
       document.getElementById("wifiModal").style.display = "block";      
     }
     function closeWiFi(){
@@ -526,6 +568,9 @@ void handleLogin() {
         showAlert(L.passShort);
         return;
       }
+
+        var wifiloadingText = (LANG === 'T')? "กำลังเชื่อมต่ออินเทอร์เน็ต โปรดรอสักครู่..." : "Connecting to the internet Please wait...";
+          showLoading(wifiloadingText);
 
       fetch("/connectwifi",{
         method:"POST",
@@ -563,25 +608,29 @@ void handleLogin() {
     }
       
     function saveEmail(){
-      
-    
-      
+       
       var e1 = document.getElementById("email1").value;
       var e2 = document.getElementById("email2").value;
       var e3 = document.getElementById("email3").value;
       var e4 = document.getElementById("email4").value;
-
-     
-       var emails = [e1,e2,e3,e4].filter(e=>e);
-
-       for(let e of emails){
-        if(!isValidEmail(e)){
-           showAlert(L.invalidemail);
+         
+         if(!e1 && !e2 && !e3 && !e4){
+          showAlert(L.pleaseenteremail);
           return;
-        }
-        }
-       
+          }
       
+      
+      
+         var emails = [e1,e2,e3,e4].filter(e=>e);
+         for(let e of emails){
+            if(!isValidEmail(e)){
+            showAlert(L.invalidemail);
+            return;
+          } 
+         } 
+          var loadingText = (LANG === 'T')? "รอระบบบันทึกสักครู่..." : "Please wait...";
+          showLoading(loadingText);
+
           fetch("/saveemail",{
             method:"POST",
             headers:{  "Content-Type":"application/x-www-form-urlencoded"},
@@ -591,14 +640,9 @@ void handleLogin() {
                   "&e4="+encodeURIComponent(e4)
           }).then(() =>{
              showAlert(L.saveemaildone);
-        
-          closeEmail();
-        
-        
-        });
-        
-        
-    }
+             closeEmail();
+        });   
+     }
     </script>
     <button id="btnRename"class = "btn-primary btn-large"onclick="renamesenser()"></button>
     <script>
@@ -709,7 +753,7 @@ void saveWiFicred(String ssid, String pass) {
   }
   EEPROM.commit();
 }
-// โหลด ssid wifi
+// โหลด ssid ของ wifi
 String loadWiFiSSID() {
   char buf[33];
   for (int i = 0; i < 32; i++) {
@@ -731,7 +775,28 @@ String loadWiFiPASS() {
   buf[32] = 0;
   return String(buf);
 }
-
+  //ฟังก์ชันนำ ssidwifi ทีบันทึกใน EEPROM  นำมาแสดง
+  String loadshowssidwifi(int addr){
+    char buf[33];
+     for (int i = 0; i< 32; i++){
+      char c = EEPROM.read(addr + i);
+      if (c == 0xFF) c = 0;
+      buf[i] = c;
+     }
+     buf[32] = 0;
+     return String(buf);
+  }
+  //ฟังก์ชันนำ passwordwifi ทีบันทึกใน EEPROM  นำมาแสดง
+   String loadshowpasswordwifi(int addr){
+    char buf[33];
+     for (int i = 0; i< 32; i++){
+      char c = EEPROM.read(addr + i);
+      if (c == 0xFF) c = 0;
+      buf[i] = c;
+     }
+     buf[32] = 0;
+     return String(buf);
+   }
 
 
 // ฟังชันก์บันทึกชื่อ
@@ -757,7 +822,7 @@ String loadSSID() {
     buf[i] = c;
   }
   buf[32] = '\0';
-  if (strlen(buf) == 0) return "SENSER-AP";
+  if (strlen(buf) == 0) return defaultssid;
   return String(buf);
 }
 //ฟังก์ชันบันทึกรหัสผ่าน
@@ -782,7 +847,7 @@ String loadPassword() {
     buf[i] = c;
   }
   buf[32] = '\0';
-  if (strlen(buf) < 8) return "12345678";  // ค่าเริ่มต้น
+  if (strlen(buf) < 8) return defaultpass;  // ค่าเริ่มต้น
   return String(buf);
 }
 
@@ -811,8 +876,7 @@ void sendEmailFromESP(String email,String deviceName){
   }
   http.end();
 }
-
-
+//
 
 //ฟังก์ชันsave email
 void saveEmail(int addr, String email) {
@@ -844,12 +908,14 @@ void factoryReset() {
     EEPROM.write(i, 0);
   }
 
-  String def = "SENSER-AP";
-  for (int i = 0; i < def.length(); i++) {
-    EEPROM.write(SSID_ADDR + i, def[i]);
+  
+  for (int i = 0; i < defaultssid.length(); i++) {
+    EEPROM.write(SSID_ADDR + i, defaultssid[i]);
   }
-  String defPass = "12345678";
-  for (int i = 0; i < defPass.length(); i++) { EEPROM.write(PASS_ADDR + i, defPass[i]); }
+  
+  for (int i = 0; i < defaultpass.length(); i++) {
+     EEPROM.write(PASS_ADDR + i, defaultpass[i]); 
+    }
 
   for (int i = EMAIL1_ADDR; i < EMAIL4_ADDR + 32; i++) {
     EEPROM.write(i, 0);
@@ -863,11 +929,14 @@ void factoryReset() {
 // ทำหน้าที่ส่งไปยัง Node.js
 
 
-
-
 //
 void setup() {
-  esp_task_wdt_init(10,true);
+  const esp_task_wdt_config_t wdt_config ={
+    .timeout_ms = 10000,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
   server.on("/generate_204",handleLogin);         //Android
   server.on("/hotspot-detect.html",handleLogin);  //ios
@@ -879,7 +948,7 @@ void setup() {
       currentLang = savedLang;
     }
   Serial.begin(115200);
-  Serial.println("WiFi Password Loaded:" + apPassword);
+  Serial.println("WiFi Password Loaded");
   WiFi.mode(WIFI_AP_STA);
   deviceId = WiFi.macAddress();
   Serial.println("Device ID:" + deviceId);
@@ -909,9 +978,6 @@ void setup() {
       Serial.println("\n Auto WiFi Failed");
     }
 }
-
-
-
   server.on("/lang/th", []() {
     currentLang = 'T';
     EEPROM.write(LANG_ADDR,'T');
@@ -929,16 +995,7 @@ void setup() {
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
   });
-
-
-
-
-  //  server.on("/");//handleRoot
   server.on( "/", handleLogin);   //"/login"
-  //  server.onNotFound([]() {
-  //    server.sendHeader("Location", "/", true);
-  //   server.send(302, "text/plain", "");
-  // });
   //เชื่อมต่อwifi
   server.on("/connectwifi", HTTP_POST, []() {
     String wifi_ssid = server.arg("ssid");
@@ -978,10 +1035,6 @@ void setup() {
       Serial.println("\nWiFi Connected!");
       Serial.println(WiFi.localIP());
       server.send(200, "text/plain", lang1);
-      // String e1 = loadEmail(EMAIL1_ADDR);
-      //   if(e1.length()>5){
-      //     sendEmailFromESP(e1,ssid);
-      //   }
     } else {
       Serial.println("\nWiFi Failed!");
       server.send(200, "text/plain", lang0);
@@ -994,22 +1047,31 @@ void setup() {
       server.send(200,"text/plain","not_connected");
     }
   });
-
+  //นำ ssid และ password ที่เก็บใว้ใน EEPROM นำมาแสดง
+  server.on("/getwifi",HTTP_GET,[](){
+      String json = "{";
+      json += "\"ssid\":\"" + loadshowssidwifi(WiFi_SSID_ADDR) + "\",";
+      json += "\"pass\":\"" + loadshowpasswordwifi(WIFI_PASS_ADDR) + "\" ";
+      json += "}";
+      server.send(200,"application/json",json);
+  });
 
   server.on("/saveemail", HTTP_POST, []() {
     String e1 = server.arg("e1");
     String e2 = server.arg("e2");
     String e3 = server.arg("e3");
     String e4 = server.arg("e4");
-    saveEmail(EMAIL1_ADDR, server.arg("e1"));
-    saveEmail(EMAIL2_ADDR, server.arg("e2"));
-    saveEmail(EMAIL3_ADDR, server.arg("e3"));
-    saveEmail(EMAIL4_ADDR, server.arg("e4"));
+
+    saveEmail(EMAIL1_ADDR, e1);
+    saveEmail(EMAIL2_ADDR, e2);
+    saveEmail(EMAIL3_ADDR, e3);
+    saveEmail(EMAIL4_ADDR, e4);
     Serial.println("Email1: " + e1);
     Serial.println("Email2: " + e2);
     Serial.println("Email3: " + e3);
     Serial.println("Email4: " + e4);
 
+    server.send(200, "text/plain", "OK");
       e1 = loadEmail(EMAIL1_ADDR);
         if(e1.length()>5){
           sendEmailFromESP(e1,ssid);
@@ -1026,9 +1088,8 @@ void setup() {
         if(e4.length()>5){
           sendEmailFromESP(e4,ssid);
         }  
-    server.send(200, "text/plain", "OK");
   });
-  
+      //นำ Email ที่เคยพิมพ์มาก่อนนำมาแสดง
   server.on("/getemail",HTTP_GET,[](){
     String json = "{";
     json += "\"e1\":\"" + loadEmail(EMAIL1_ADDR) + "\",";
@@ -1051,7 +1112,7 @@ void setup() {
     }
   });
 
-  server.on("/repassword", HTTP_POST, []() {
+  server.on("/repassword", HTTP _POST, []() {
     String pass = server.arg("password");
     if (pass.length() >= 8) {
       savePassword(pass);
