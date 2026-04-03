@@ -10,14 +10,18 @@ const byte DNS_PORT = 53;
 WebServer server(80);
 DNSServer dnsServer;
 //ค่าเริมต้น
- String ssid = "SENSER-AP";
- String apPassword = "12345678";
- const String defaultssid = "SENSER-AP";
- const String defaultpass = "12345678";
- char currentLang = 'E',savedLang;
+String ssid = "SENSER-AP";
+String apPassword = "12345678";
+const String defaultssid = "SENSER-AP";
+const String defaultpass = "12345678";
+char currentLang = 'E', savedLang;
 //
-String deviceId,lang1,lang0;
-
+String deviceId, lang1, lang0;
+//
+// pinและตัวแปรในส่วน hardware
+const int pirsenser_pin = 21;
+unsigned long lastEmailTime = 0;
+const unsigned long emailCooldown = 10000;  //หน่วงเวลา 10วิ
 //
 #define EEPROM_SIZE 512
 #define SSID_ADDR 0
@@ -174,7 +178,7 @@ String pageFooter = R"HTML(
 
 
 void handleLogin() {
- 
+
 
   String html = pageHeader;
   html += "<script>var LANG = '" + String(currentLang) + "';</script>";
@@ -775,28 +779,28 @@ String loadWiFiPASS() {
   buf[32] = 0;
   return String(buf);
 }
-  //ฟังก์ชันนำ ssidwifi ทีบันทึกใน EEPROM  นำมาแสดง
-  String loadshowssidwifi(int addr){
-    char buf[33];
-     for (int i = 0; i< 32; i++){
-      char c = EEPROM.read(addr + i);
-      if (c == 0xFF) c = 0;
-      buf[i] = c;
-     }
-     buf[32] = 0;
-     return String(buf);
+//ฟังก์ชันนำ ssidwifi ทีบันทึกใน EEPROM  นำมาแสดง
+String loadshowssidwifi(int addr) {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(addr + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
   }
-  //ฟังก์ชันนำ passwordwifi ทีบันทึกใน EEPROM  นำมาแสดง
-   String loadshowpasswordwifi(int addr){
-    char buf[33];
-     for (int i = 0; i< 32; i++){
-      char c = EEPROM.read(addr + i);
-      if (c == 0xFF) c = 0;
-      buf[i] = c;
-     }
-     buf[32] = 0;
-     return String(buf);
-   }
+  buf[32] = 0;
+  return String(buf);
+}
+//ฟังก์ชันนำ passwordwifi ทีบันทึกใน EEPROM  นำมาแสดง
+String loadshowpasswordwifi(int addr) {
+  char buf[33];
+  for (int i = 0; i < 32; i++) {
+    char c = EEPROM.read(addr + i);
+    if (c == 0xFF) c = 0;
+    buf[i] = c;
+  }
+  buf[32] = 0;
+  return String(buf);
+}
 
 
 // ฟังชันก์บันทึกชื่อ
@@ -851,9 +855,9 @@ String loadPassword() {
   return String(buf);
 }
 
- //ฟังก์ชันส่ง Email ไปยัง server
-void sendEmailFromESP(String email,String deviceName){
-  if(WiFi.status() !=WL_CONNECTED){
+//ฟังก์ชันส่ง Email ไปยัง server
+void sendEmailFromESP(String email[], int count, String deviceName, String senser) {
+  if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi not connected");
     return;
   }
@@ -861,17 +865,23 @@ void sendEmailFromESP(String email,String deviceName){
   http.begin("https://pir-senser-backend.onrender.com/send-email");
   http.addHeader("Content-Type", "application/json");
   String body = "{";
-  body += "\"email\":[\""+email+"\"],";
-  body +="\"deviceName\":\""+deviceName+"\"";
+  body += "\"email\":[";
+  for (int i = 0; i < count; i++) {
+    if (i > 0) body += ",";
+    body += "\"" + email[i] + "\"";
+  }
+  body += "],";
+  body += "\"deviceName\":\"" + deviceName + "\",";
+  body += "\"lang\":\"" + String(currentLang) + "\",";
+  body += "\"senser\":\"" + senser + "\"";
   body += "}";
   int httpCode = http.POST(body);
   String payload = http.getString();
-  if(httpCode > 0 ){
-    Serial.print("Email sent:"+ email);
-    Serial.print("Status:"+ String(httpCode));
-    Serial.println("Response:"+payload);
-  }
-  else{
+  if (httpCode > 0) {
+    Serial.print("Email sent, count:" + String(count));
+    Serial.print("Status:" + String(httpCode));
+    Serial.println("Response:" + payload);
+  } else {
     Serial.println("Email failed");
   }
   http.end();
@@ -908,14 +918,14 @@ void factoryReset() {
     EEPROM.write(i, 0);
   }
 
-  
+
   for (int i = 0; i < defaultssid.length(); i++) {
     EEPROM.write(SSID_ADDR + i, defaultssid[i]);
   }
-  
+
   for (int i = 0; i < defaultpass.length(); i++) {
-     EEPROM.write(PASS_ADDR + i, defaultpass[i]); 
-    }
+    EEPROM.write(PASS_ADDR + i, defaultpass[i]);
+  }
 
   for (int i = EMAIL1_ADDR; i < EMAIL4_ADDR + 32; i++) {
     EEPROM.write(i, 0);
@@ -926,28 +936,52 @@ void factoryReset() {
   delay(500);
   ESP.restart();
 }
-// ทำหน้าที่ส่งไปยัง Node.js
+// ฟังก์ชัน pirsenser
+void checkPIR() {
+  int val = digitalRead(pirsenser_pin);
+  if (val == 1) {
 
-
-//
+    unsigned long now = millis();
+    if (now - lastEmailTime > emailCooldown) {
+      lastEmailTime = now;
+      Serial.println("Motion detected!");
+      // ส่ง email ทีบันทึกไว้
+      String emails[4];
+      int count = 0;
+      int addrList[] = { EMAIL1_ADDR, EMAIL2_ADDR, EMAIL3_ADDR, EMAIL4_ADDR };
+      for (int i = 0; i < 4; i++) {
+        String e = loadEmail(addrList[i]);
+        if (e.length() > 5) {
+          emails[count] = e;
+          count++;
+        }
+      }
+      if (count > 0) {
+        sendEmailFromESP(emails, count, ssid, "ALERT");
+      }
+    }
+  }
+}
 void setup() {
-  const esp_task_wdt_config_t wdt_config ={
+  pinMode(pirsenser_pin, INPUT);
+  Serial.begin(115200);
+
+  const esp_task_wdt_config_t wdt_config = {
     .timeout_ms = 10000,
     .idle_core_mask = 0,
     .trigger_panic = true
   };
   esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
-  server.on("/generate_204",handleLogin);         //Android
-  server.on("/hotspot-detect.html",handleLogin);  //ios
+  server.on("/generate_204", handleLogin);         //Android
+  server.on("/hotspot-detect.html", handleLogin);  //ios
   server.on("/fwlink", handleLogin);               //Windows
   EEPROM.begin(EEPROM_SIZE);
   // eeprom ของภาษา
   savedLang = EEPROM.read(LANG_ADDR);
-    if(savedLang == 'T' || savedLang == 'E'){
-      currentLang = savedLang;
-    }
-  Serial.begin(115200);
+  if (savedLang == 'T' || savedLang == 'E') {
+    currentLang = savedLang;
+  }
   Serial.println("WiFi Password Loaded");
   WiFi.mode(WIFI_AP_STA);
   deviceId = WiFi.macAddress();
@@ -965,7 +999,7 @@ void setup() {
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     Serial.print("Auto connecting to WiFi");
     unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) //ค่าเดิม10000
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 20000)  //ค่าเดิม10000
     {
       delay(500);
       Serial.print(".");
@@ -977,25 +1011,25 @@ void setup() {
     } else {
       Serial.println("\n Auto WiFi Failed");
     }
-}
+  }
   server.on("/lang/th", []() {
     currentLang = 'T';
-    EEPROM.write(LANG_ADDR,'T');
+    EEPROM.write(LANG_ADDR, 'T');
     EEPROM.commit();
     Serial.println("Language: TH");
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");  
+    server.send(302, "text/plain", "");
   });
 
   server.on("/lang/en", []() {
     currentLang = 'E';
-    EEPROM.write(LANG_ADDR,'E');
+    EEPROM.write(LANG_ADDR, 'E');
     EEPROM.commit();
     Serial.println("Language: EN");
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
   });
-  server.on( "/", handleLogin);   //"/login"
+  server.on("/", handleLogin);  //"/login"
   //เชื่อมต่อwifi
   server.on("/connectwifi", HTTP_POST, []() {
     String wifi_ssid = server.arg("ssid");
@@ -1020,17 +1054,16 @@ void setup() {
       esp_task_wdt_reset();
     }
 
-    
 
-    if(currentLang == 'E'){
+
+    if (currentLang == 'E') {
       lang1 = "✅ Connected to Internet!";
       lang0 = "❌ Connection Failed";
-    }
-    else{
+    } else {
       lang1 = "✅ เชื่อมต่อกับอินเทอร์เน็ตได้แล้ว!";
       lang0 = "❌ การเชื่อมต่อล้มเหลว";
     }
-    
+
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\nWiFi Connected!");
       Serial.println(WiFi.localIP());
@@ -1040,20 +1073,20 @@ void setup() {
       server.send(200, "text/plain", lang0);
     }
   });
-  server.on("/status",HTTP_GET,[](){
-    if(WiFi.status() == WL_CONNECTED){
-      server.send(200,"text/plain","connected");
-    } else{
-      server.send(200,"text/plain","not_connected");
+  server.on("/status", HTTP_GET, []() {
+    if (WiFi.status() == WL_CONNECTED) {
+      server.send(200, "text/plain", "connected");
+    } else {
+      server.send(200, "text/plain", "not_connected");
     }
   });
   //นำ ssid และ password ที่เก็บใว้ใน EEPROM นำมาแสดง
-  server.on("/getwifi",HTTP_GET,[](){
-      String json = "{";
-      json += "\"ssid\":\"" + loadshowssidwifi(WiFi_SSID_ADDR) + "\",";
-      json += "\"pass\":\"" + loadshowpasswordwifi(WIFI_PASS_ADDR) + "\" ";
-      json += "}";
-      server.send(200,"application/json",json);
+  server.on("/getwifi", HTTP_GET, []() {
+    String json = "{";
+    json += "\"ssid\":\"" + loadshowssidwifi(WiFi_SSID_ADDR) + "\",";
+    json += "\"pass\":\"" + loadshowpasswordwifi(WIFI_PASS_ADDR) + "\" ";
+    json += "}";
+    server.send(200, "application/json", json);
   });
 
   server.on("/saveemail", HTTP_POST, []() {
@@ -1066,38 +1099,31 @@ void setup() {
     saveEmail(EMAIL2_ADDR, e2);
     saveEmail(EMAIL3_ADDR, e3);
     saveEmail(EMAIL4_ADDR, e4);
+
     Serial.println("Email1: " + e1);
     Serial.println("Email2: " + e2);
     Serial.println("Email3: " + e3);
     Serial.println("Email4: " + e4);
 
     server.send(200, "text/plain", "OK");
-      e1 = loadEmail(EMAIL1_ADDR);
-        if(e1.length()>5){
-          sendEmailFromESP(e1,ssid);
-        }
-      e2 = loadEmail(EMAIL2_ADDR);
-        if(e2.length()>5){
-          sendEmailFromESP(e2,ssid);
-        } 
-      e3 = loadEmail(EMAIL3_ADDR);
-        if(e3.length()>5){
-          sendEmailFromESP(e3,ssid);
-        }   
-      e4 = loadEmail(EMAIL4_ADDR);
-        if(e4.length()>5){
-          sendEmailFromESP(e4,ssid);
-        }  
+
+    String emails[4];
+    int count = 0;
+    if (e1.length() > 5) emails[count++] = e1;
+    if (e2.length() > 5) emails[count++] = e2;
+    if (e3.length() > 5) emails[count++] = e3;
+    if (e4.length() > 5) emails[count++] = e4;
+    if (count > 0) sendEmailFromESP(emails, count, ssid, "SAVE");
   });
-      //นำ Email ที่เคยพิมพ์มาก่อนนำมาแสดง
-  server.on("/getemail",HTTP_GET,[](){
+  //นำ Email ที่เคยพิมพ์มาก่อนนำมาแสดง
+  server.on("/getemail", HTTP_GET, []() {
     String json = "{";
     json += "\"e1\":\"" + loadEmail(EMAIL1_ADDR) + "\",";
     json += "\"e2\":\"" + loadEmail(EMAIL2_ADDR) + "\",";
     json += "\"e3\":\"" + loadEmail(EMAIL3_ADDR) + "\",";
     json += "\"e4\":\"" + loadEmail(EMAIL4_ADDR) + "\" ";
     json += "}";
-    server.send(200,"application/json",json);
+    server.send(200, "application/json", json);
   });
 
   server.on("/rename", HTTP_POST, []() {
@@ -1112,7 +1138,7 @@ void setup() {
     }
   });
 
-  server.on("/repassword", HTTP _POST, []() {
+  server.on("/repassword", HTTP_POST, []() {
     String pass = server.arg("password");
     if (pass.length() >= 8) {
       savePassword(pass);
@@ -1139,4 +1165,5 @@ void loop() {
   esp_task_wdt_reset();
   dnsServer.processNextRequest();
   server.handleClient();
+  checkPIR();
 }
