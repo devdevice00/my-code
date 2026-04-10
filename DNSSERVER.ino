@@ -18,10 +18,32 @@ char currentLang = 'E', savedLang;
 //
 String deviceId, lang1, lang0;
 //
+// wifi
+bool wificonnected = false;
+unsigned long wifiblinkstart = 0;
+// start
+unsigned long start;
+//
 // pinและตัวแปรในส่วน hardware
-const int pirsenser_pin = 21;
+
+int pirsenser_pin = 21;
+//ส่งแจ้งไปยังemail
 unsigned long lastEmailTime = 0;
 const unsigned long emailCooldown = 10000;  //หน่วงเวลา 10วิ
+// pirแสดงที่หน้า ui
+unsigned long lastMotionTime = 0;
+const unsigned long motionDisplayTime = 5000;  //แสดง 5 วินาที
+bool motionDetected = false;
+// led
+int greenled = 32, redled = 33;
+//resetbutton
+int resetbutton = 25;
+unsigned long resetbuttonstart = 0;
+unsigned long lastcounttime = 0;
+unsigned long elapsedSeconds;
+unsigned long blinkstart;
+bool resetbuttonheld = false;
+
 //
 #define EEPROM_SIZE 512
 #define SSID_ADDR 0
@@ -196,6 +218,7 @@ void handleLogin() {
     
     statusinterneton:  "🟢เชื่อมต่ออินเทอร์เน็ต",
     statusinternetoff: "🔴ไม่เชื่อมต่ออินเทอร์เน็ต",
+    statusmotiondetected: "🚨 ตรวจพบการเคลื่อนไหว",
     
     langthai:"ไทย",
     langeng:"อังกฤษ",
@@ -248,6 +271,7 @@ void handleLogin() {
     
     statusinterneton:  "🟢Connect internet",
     statusinternetoff: "🔴Not connect internet",
+    statusmotiondetected: "🚨 Motion Detected",
     
     langthai:"THAI",
     langeng:"ENG",
@@ -445,8 +469,7 @@ void handleLogin() {
     font-weight:bold;
     font-size: 20px;
     z-index: 9999;
-    ">
-      
+    ">  
     </p>
 
     <script>
@@ -469,7 +492,36 @@ void handleLogin() {
     setInterval(checkInternetStatus,3000);
     </script>
 
-
+    <p id="pirStatus" style="
+    position: fixed;
+    top: 30px;
+    left: 10px;
+    color: orange;
+    font-weight: bold;
+    font-size: 20px;
+    z-index: 9999;
+    display: none;
+    ">
+    </p>
+    
+    <script>
+    function checkPIRStatus(){
+      fetch("/pirStatus")
+      .then(res => res.text())
+      .then(status => {
+        let label = document.getElementById("pirStatus");
+        label.innerText = L.statusmotiondetected;
+        if(status === "detected"){
+          label.style.display  = "block";
+        }
+        else{
+          label.style.display = "none";
+        }
+      });
+    }
+    checkPIRStatus();
+    setInterval(checkPIRStatus, 1000);
+    </script>
 
     <br>
     <br>
@@ -940,11 +992,14 @@ void factoryReset() {
 void checkPIR() {
   int val = digitalRead(pirsenser_pin);
   if (val == 1) {
-
+    motionDetected = true;
+    lastMotionTime = millis();
     unsigned long now = millis();
     if (now - lastEmailTime > emailCooldown) {
       lastEmailTime = now;
       Serial.println("Motion detected!");
+      digitalWrite(redled, 1);
+
       // ส่ง email ทีบันทึกไว้
       String emails[4];
       int count = 0;
@@ -961,9 +1016,67 @@ void checkPIR() {
       }
     }
   }
+  if (millis() - lastMotionTime > motionDisplayTime) {
+    motionDetected = false;
+  }
 }
+// จัดการled
+void handleled() {
+  digitalWrite(greenled, 1);
+  if (motionDetected) {
+    digitalWrite(redled, 1);
+  } else {
+    digitalWrite(redled, 0);
+  }
+
+  if (wificonnected) {
+    if (millis() - wifiblinkstart < 5000) {
+      digitalWrite(greenled, (millis() / 200) % 2);  //กระพริบทุก 200ms
+    } else {
+      wificonnected = false;
+      digitalWrite(greenled, 1);
+    }
+    return;
+  }
+}
+// จัดการreset button
+void handleresetbutton() {
+  int btn = digitalRead(resetbutton);
+  if (btn == 0) {
+    if (!resetbuttonheld) {
+      resetbuttonstart = millis();
+      resetbuttonheld = true;
+      Serial.println("starting reset");
+    }
+    //กดปุ่มresetนับ 20
+    elapsedSeconds = (millis() - resetbuttonstart) / 1000;
+    if (elapsedSeconds > lastcounttime && elapsedSeconds <= 20) {
+      lastcounttime = elapsedSeconds;
+      Serial.print(elapsedSeconds);
+      Serial.println(" sec");
+    }
+    if (millis() - resetbuttonstart >= 20000) {
+      blinkstart = millis();
+      while (millis() - blinkstart < 5000) {
+        digitalWrite(greenled, 1);
+        delay(200);
+        digitalWrite(greenled, 0);
+        delay(200);
+        esp_task_wdt_reset();
+      }
+      factoryReset();
+    }
+  } else {
+    resetbuttonheld = false;
+    lastcounttime = 0;
+  }
+}
+
 void setup() {
-  pinMode(pirsenser_pin, INPUT);
+  pinMode(pirsenser_pin, INPUT_PULLDOWN);  // INPUT_PULLDOWN ให้เป็น0ตลอดเมื่อไม่มีอะไรเกิดขึ้นหรือถอดตัวsenserออกจากขาpin
+  pinMode(greenled, OUTPUT);
+  pinMode(redled, OUTPUT);
+  pinMode(resetbutton, INPUT_PULLUP);
   Serial.begin(115200);
 
   const esp_task_wdt_config_t wdt_config = {
@@ -998,11 +1111,10 @@ void setup() {
     WiFi.mode(WIFI_AP_STA);
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     Serial.print("Auto connecting to WiFi");
-    unsigned long start = millis();
+    start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 20000)  //ค่าเดิม10000
     {
       delay(500);
-      Serial.print(".");
       esp_task_wdt_reset();
     }
     if (WiFi.status() == WL_CONNECTED) {
@@ -1046,7 +1158,7 @@ void setup() {
     WiFi.begin(wifi_ssid.c_str(), wifi_pass.c_str());
 
 
-    unsigned long start = millis();
+    start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
       delay(500);
       Serial.print(".");
@@ -1068,11 +1180,14 @@ void setup() {
       Serial.println("\nWiFi Connected!");
       Serial.println(WiFi.localIP());
       server.send(200, "text/plain", lang1);
+      wificonnected = true;
+      wifiblinkstart = millis();
     } else {
       Serial.println("\nWiFi Failed!");
       server.send(200, "text/plain", lang0);
     }
   });
+  // แสดงสถานะของ internet
   server.on("/status", HTTP_GET, []() {
     if (WiFi.status() == WL_CONNECTED) {
       server.send(200, "text/plain", "connected");
@@ -1080,6 +1195,12 @@ void setup() {
       server.send(200, "text/plain", "not_connected");
     }
   });
+  //  แสดงสถานะของ senser
+  server.on("/pirStatus", HTTP_GET, []() {
+    if (motionDetected) server.send(200, "text/plain", "detected");
+    else server.send(200, "text/plain", "clear");
+  });
+
   //นำ ssid และ password ที่เก็บใว้ใน EEPROM นำมาแสดง
   server.on("/getwifi", HTTP_GET, []() {
     String json = "{";
@@ -1166,4 +1287,6 @@ void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   checkPIR();
+  handleled();
+  handleresetbutton();
 }
