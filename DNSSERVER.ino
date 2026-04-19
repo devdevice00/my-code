@@ -26,18 +26,18 @@ unsigned long start;
 //
 // pinและตัวแปรในส่วน hardware
 
-int pirsenser_pin = 21;
+int pirsenser_pin = 8; //senser
 //ส่งแจ้งไปยังemail
 unsigned long lastEmailTime = 0;
-const unsigned long emailCooldown = 10000;  //หน่วงเวลา 10วิ
+const unsigned long emailCooldown = 5000;  //หน่วงเวลา 5วิ ค่าเดิม10วิ
 // pirแสดงที่หน้า ui
 unsigned long lastMotionTime = 0;
-const unsigned long motionDisplayTime = 5000;  //แสดง 5 วินาที
+const unsigned long motionDisplayTime = 3000;  //แสดง 3 วินาที ค่าเดิม5วิ
 bool motionDetected = false;
 // led
-int greenled = 32, redled = 33;
+int greenled = 3, redled = 2;
 //resetbutton
-int resetbutton = 25;
+int resetbutton = 4;
 unsigned long resetbuttonstart = 0;
 unsigned long lastcounttime = 0;
 unsigned long elapsedSeconds;
@@ -520,7 +520,7 @@ void handleLogin() {
       });
     }
     checkPIRStatus();
-    setInterval(checkPIRStatus, 1000);
+    setInterval(checkPIRStatus, 300);
     </script>
 
     <br>
@@ -930,9 +930,9 @@ void sendEmailFromESP(String email[], int count, String deviceName, String sense
   int httpCode = http.POST(body);
   String payload = http.getString();
   if (httpCode > 0) {
-    Serial.print("Email sent, count:" + String(count));
-    Serial.print("Status:" + String(httpCode));
-    Serial.println("Response:" + payload);
+    Serial.print("Email sent,count: " + String(count));
+    Serial.print(" Status:" + String(httpCode));
+    Serial.println(" Response:" + payload);
   } else {
     Serial.println("Email failed");
   }
